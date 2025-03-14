@@ -1,0 +1,43 @@
+name: Deploy AWS Lambda and API Gateway
+
+on:
+  push:
+    branches:
+      - main  # Triggers on push to main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Install AWS CLI
+        run: |
+          sudo apt update
+          sudo apt install -y awscli
+
+      - name: Package and Deploy Lambda Functions
+        run: |
+          zip -r financial_events.zip financial_events.py
+          zip -r news_events.zip news_events.py
+          zip -r social_media_events.zip social_media_events.py
+
+          aws lambda update-function-code --function-name FinancialEvents --zip-file fileb://financial_events.zip
+          aws lambda update-function-code --function-name NewsEvents --zip-file fileb://news_events.zip
+          aws lambda update-function-code --function-name SocialMediaEvents --zip-file fileb://social_media_events.zip
+
+      - name: Deploy API Gateway
+        run: |
+          API_ID=$(aws apigateway get-rest-apis --query "items[?name=='Event Intelligence API'].id" --output text)
+          aws apigateway create-deployment --rest-api-id $API_ID --stage-name prod
+          echo "API Gateway deployed at: https://$API_ID.execute-api.us-east-1.amazonaws.com/prod"
